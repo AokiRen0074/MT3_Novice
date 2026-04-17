@@ -1,4 +1,6 @@
 #include <Novice.h>
+#include "Vector3.h"
+#include "Matrix4x4.h"
 
 const char kWindowTitle[] = "LC1B_01_アオキレン_タイトル";
 
@@ -11,6 +13,9 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	// キー入力結果を受け取る箱
 	char keys[256] = {0};
 	char preKeys[256] = {0};
+
+	Vector3 v1(1.0f, 2.0f, 3.0f);
+	Vector3 v2(4.0f, 5.0f, 6.0f);
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
