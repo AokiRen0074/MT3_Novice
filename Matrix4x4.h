@@ -76,5 +76,8 @@ Matrix4x4 MakeOrthographicMatrix(float left, float top, float right, float botto
 // 4x4 ビューポート行列
 Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
 
+// クロス積
+Vector3 Cross(const Vector3& v1, const Vector3& v2);
+
 // 4x4行列の数値表示
 void MatrixScreenPrintf(int x, int y, const Matrix4x4& matrix, const char* label);
