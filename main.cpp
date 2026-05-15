@@ -15,6 +15,16 @@ static const int kColumnWidth = 60;
 const int kWindowWidth = 1280;
 const int kWindowHeight = 720;
 
+struct Sphere {
+	Vector3 center;
+	float radius;
+};
+
+struct Segment {
+	Vector3 origin;
+	Vector3 diff;
+};
+
 
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
 	const float kGridHalfWidth = 2.0f;                                      // Gridの半分の幅
@@ -68,25 +78,20 @@ void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMa
 	}
 }
 
-struct Sphere {
-	Vector3 center;
-	float radius;
-};
-
 void DrawSphere(const Sphere& sphere, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
-	const uint32_t kSubdivision = 16;                       
-	const float kLonEvery = (2.0f * (float)M_PI) / kSubdivision;    
-	const float kLatEvery = (float)M_PI / kSubdivision;          
+	const uint32_t kSubdivision = 16;
+	const float kLonEvery = (2.0f * (float)M_PI) / kSubdivision;
+	const float kLatEvery = (float)M_PI / kSubdivision;
 
 	// 緯度の方向に分割
 	for (uint32_t latIndex = 0; latIndex < kSubdivision; ++latIndex) {
-		float lat = -(float)M_PI / 2.0f + kLatEvery * latIndex;    
-		float nextLat = lat + kLatEvery;                          
+		float lat = -(float)M_PI / 2.0f + kLatEvery * latIndex;
+		float nextLat = lat + kLatEvery;
 
 		// 経度の方向に分割
 		for (uint32_t lonIndex = 0; lonIndex < kSubdivision; ++lonIndex) {
-			float lon = lonIndex * kLonEvery;                    
-			float nextLon = lon + kLonEvery;                      
+			float lon = lonIndex * kLonEvery;
+			float nextLon = lon + kLonEvery;
 
 			// world座標系での a, b, c を求める
 			Vector3 a, b, c;
@@ -134,6 +139,43 @@ void DrawSphere(const Sphere& sphere, const Matrix4x4& viewProjectionMatrix, con
 	}
 }
 
+
+
+
+Vector3 Project(const Vector3& v1, const Vector3& v2) {
+	// 内積を計算
+	float dot = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+	// v2の長さの2乗を計算
+	float lengthSq = v2.x * v2.x + v2.y * v2.y + v2.z * v2.z;
+
+	float t = dot / lengthSq;
+	return { v2.x * t, v2.y * t, v2.z * t };
+}
+
+Vector3 ClosestPoint(const Vector3& point, const Segment& segment) {
+	// 始点から点へのベクトル
+	Vector3 v = { point.x - segment.origin.x, point.y - segment.origin.y, point.z - segment.origin.z };
+
+	// 始点から点へのベクトルを線分の方向に投影
+	Vector3 project = Project(v, segment.diff);
+
+	// 線分上の位置を計算
+	float dot = project.x * segment.diff.x + project.y * segment.diff.y + project.z * segment.diff.z;
+	float lengthSq = segment.diff.x * segment.diff.x + segment.diff.y * segment.diff.y + segment.diff.z * segment.diff.z;
+	float t = dot / lengthSq;
+
+	if (t < 0.0f) t = 0.0f;
+	if (t > 1.0f) t = 1.0f;
+
+	// 最終的な座標を計算
+	return { segment.origin.x + segment.diff.x * t,
+			 segment.origin.y + segment.diff.y * t,
+			 segment.origin.z + segment.diff.z * t };
+}
+
+
+
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
@@ -144,7 +186,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	char keys[256] = { 0 };
 	char preKeys[256] = { 0 };
 
-	
+
 	// カメラの初期設
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
@@ -153,6 +195,9 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Sphere sphere;
 	sphere.center = { 0.0f, 0.0f, 0.0f };
 	sphere.radius = 1.0f;
+
+	Segment segment{ {-2.0f, -1.0f, 0.0f}, {5.0f, 3.0f, 2.0f} }; // 始点と差分
+	Vector3 point{ -1.5f, 0.6f, 0.6f }; // 空間上の点
 
 
 	// ウィンドウの×ボタンが押されるまでループ
@@ -167,16 +212,24 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		///
 		/// ↓更新処理ここから
 		///
+	
 
-		// ImGui
-		ImGui::Begin("Settings");
-		ImGui::DragFloat3("Camera Translate", &cameraTranslate.x, 0.01f);
-		ImGui::DragFloat3("Camera Rotate", &cameraRotate.x, 0.01f);
-		ImGui::DragFloat3("Sphere Center", &sphere.center.x, 0.01f);
-		ImGui::DragFloat("Sphere Radius", &sphere.radius, 0.01f);
+
+		// 点から始点へのベクトルを計算
+		Vector3 v = { point.x - segment.origin.x, point.y - segment.origin.y, point.z - segment.origin.z };
+		// 正射影ベクトルを計算
+		Vector3 project = Project(v, segment.diff);
+		// 線分上の最近接点を計算
+		Vector3 closestPoint = ClosestPoint(point, segment);
+
+		// ImGuiで値を調整できるようにする
+		ImGui::Begin("Debug");
+		ImGui::DragFloat3("Point", &point.x, 0.01f);
+		ImGui::DragFloat3("Segment Origin", &segment.origin.x, 0.01f);
+		ImGui::DragFloat3("Segment Diff", &segment.diff.x, 0.01f);
+		ImGui::InputFloat3("Project Result", &project.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::End();
 
-		// カメラの行列を計算
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
 		Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraScale, cameraRotate, cameraTranslate);
@@ -191,6 +244,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		// Viewport行列
 		Matrix4x4 viewportMatrix = MakeViewportMatrix(0.0f, 0.0f, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 
+
 		///
 		/// ↑更新処理ここまで
 		///
@@ -202,8 +256,22 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		// グリッドを描画
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
-		// 球体を描画
-		DrawSphere(sphere, viewProjectionMatrix, viewportMatrix, 0xFFFFFFFF);
+
+
+		// 線分の描画 
+		Vector3 start = Transform(Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
+		Vector3 segmentEnd = { segment.origin.x + segment.diff.x, segment.origin.y + segment.diff.y, segment.origin.z + segment.diff.z };
+		Vector3 end = Transform(Transform(segmentEnd, viewProjectionMatrix), viewportMatrix);
+		Novice::DrawLine(int(start.x), int(start.y), int(end.x), int(end.y), WHITE);
+
+		// 元の点 
+		Sphere pointSphere{ point, 0.01f };
+		DrawSphere(pointSphere, viewProjectionMatrix, viewportMatrix, RED);
+
+		// 最近接点
+		Sphere closestPointSphere{ closestPoint, 0.01f };
+		DrawSphere(closestPointSphere, viewProjectionMatrix, viewportMatrix, BLACK);
+
 
 		///
 		/// ↑描画処理ここまで
