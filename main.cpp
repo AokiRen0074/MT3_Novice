@@ -25,6 +25,11 @@ struct Segment {
 	Vector3 diff;
 };
 
+// 平面
+struct Plane {
+	Vector3 normal; // 法線
+	float distance; //原点からの距離
+};
 
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
 	const float kGridHalfWidth = 2.0f;                                      // Gridの半分の幅
@@ -157,6 +162,59 @@ bool IsCollision(const Sphere& s1, const Sphere& s2) {
 	return false;
 }
 
+// 球と面の当たり判定
+bool IsCollision(const Sphere& sphere, const Plane& plane) {
+	// 球の中心と平面の法線の内積を計算
+	float dot = sphere.center.x * plane.normal.x +
+		sphere.center.y * plane.normal.y +
+		sphere.center.z * plane.normal.z;
+
+	// 平面と球の中心との距離を求める
+	float distance = std::abs(dot - plane.distance);
+
+	// 距離が半径以下なら衝突
+	if (distance <= sphere.radius) {
+		return true;
+	}
+	return false;
+}
+
+//法線と垂直なベクトルを1つ求める
+Vector3 Perpendicular(const Vector3& vector) {
+	if (vector.x != 0.0f || vector.y != 0.0f) {
+		return { -vector.y, vector.x, 0.0f };
+	}
+	return { 0.0f, -vector.z, vector.y };
+}
+
+// 平面の描画関数
+void DrawPlane(const Plane& plane, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
+	// 中心点を決める
+	Vector3 center = { plane.distance * plane.normal.x, plane.distance * plane.normal.y, plane.distance * plane.normal.z };
+
+	// 法線と垂直なベクトルを求める
+	Vector3 perpendiculars[4];
+	perpendiculars[0] = Normalize(Perpendicular(plane.normal));
+
+	perpendiculars[1] = { -perpendiculars[0].x, -perpendiculars[0].y, -perpendiculars[0].z };
+	// 外積
+	perpendiculars[2] = Cross(plane.normal, perpendiculars[0]);
+	perpendiculars[3] = { -perpendiculars[2].x, -perpendiculars[2].y, -perpendiculars[2].z };
+
+	// 4頂点を求めてスクリーン座標に変換
+	Vector3 points[4];
+	for (int32_t index = 0; index < 4; ++index) {
+		Vector3 extend = { 2.0f * perpendiculars[index].x, 2.0f * perpendiculars[index].y, 2.0f * perpendiculars[index].z };
+		Vector3 point = { center.x + extend.x, center.y + extend.y, center.z + extend.z };
+		points[index] = Transform(Transform(point, viewProjectionMatrix), viewportMatrix);
+	}
+
+	// pointsをそれぞれ結んで矩形を描画する
+	Novice::DrawLine((int)points[0].x, (int)points[0].y, (int)points[2].x, (int)points[2].y, color);
+	Novice::DrawLine((int)points[2].x, (int)points[2].y, (int)points[1].x, (int)points[1].y, color);
+	Novice::DrawLine((int)points[1].x, (int)points[1].y, (int)points[3].x, (int)points[3].y, color);
+	Novice::DrawLine((int)points[3].x, (int)points[3].y, (int)points[0].x, (int)points[0].y, color);
+}
 
 /*
 Vector3 Project(const Vector3& v1, const Vector3& v2) {
@@ -210,13 +268,13 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 	// 球体の初期設定
 // 2つの球の初期化
-	Sphere sphere1;
-	sphere1.center = { -1.0f, 0.0f, 0.0f };
-	sphere1.radius = 1.0f;
+	Sphere sphere;
+	sphere.center = { 0.0f, 1.0f, 0.0f };
+	sphere.radius = 0.5f;
 
-	Sphere sphere2;
-	sphere2.center = { 1.0f, 0.0f, 0.0f };
-	sphere2.radius = 1.0f;
+	Plane plane;
+	plane.normal = { 0.0f, 1.0f, 0.0f }; // 最初は上向き
+	plane.distance = 0.0f;
 
 	// マウス操作用
 	int mouseX = 0;
@@ -275,23 +333,25 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 		// ImGuiで値を調整できるようにする
 		ImGui::Begin("Settings");
-		ImGui::DragFloat3("Sphere1 Center", &sphere1.center.x, 0.01f);
-		ImGui::DragFloat("Sphere1 Radius", &sphere1.radius, 0.01f);
-		ImGui::DragFloat3("Sphere2 Center", &sphere2.center.x, 0.01f);
-		ImGui::DragFloat("Sphere2 Radius", &sphere2.radius, 0.01f);
+		ImGui::Text("Sphere");
+		ImGui::DragFloat3("Center", &sphere.center.x, 0.01f);
+		ImGui::DragFloat("Radius", &sphere.radius, 0.01f);
+
+		ImGui::Separator();
+
+		ImGui::Text("Plane");
+		ImGui::DragFloat3("Normal", &plane.normal.x, 0.01f);
+		plane.normal = Normalize(plane.normal);
+		ImGui::DragFloat("Distance", &plane.distance, 0.01f);
 		ImGui::End();
 
-		bool isCollide = IsCollision(sphere1, sphere2);
-
-		// 衝突していたら片方の球を赤くする
-		unsigned int color1 = WHITE;
-		unsigned int color2 = WHITE;
-
-		if (isCollide) {
-			color1 = RED;
-		}
-
+		// 衝突判定
+		bool isCollide = IsCollision(sphere, plane);
+		// 衝突していたら赤、していなければ白
+		unsigned int sphereColor = isCollide ? RED : WHITE;
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
+
+
 		Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraScale, cameraRotate, cameraTranslate);
 		Matrix4x4 viewMatrix = Inverse(cameraMatrix);
 
@@ -317,8 +377,8 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
 
-		DrawSphere(sphere1, viewProjectionMatrix, viewportMatrix, color1);
-		DrawSphere(sphere2, viewProjectionMatrix, viewportMatrix, color2);
+		DrawPlane(plane, viewProjectionMatrix, viewportMatrix, WHITE);
+		DrawSphere(sphere, viewProjectionMatrix, viewportMatrix, sphereColor);
 
 		///
 		/// ↑描画処理ここまで
