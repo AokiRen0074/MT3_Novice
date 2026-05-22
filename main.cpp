@@ -179,6 +179,32 @@ bool IsCollision(const Sphere& sphere, const Plane& plane) {
 	return false;
 }
 
+// 線分と面の当たり判定
+bool IsCollision(const Segment& segment, const Plane& plane) {
+	//ず垂直判定を行うために、法線と線の内積を求める
+	float dot = plane.normal.x * segment.diff.x +
+		plane.normal.y * segment.diff.y +
+		plane.normal.z * segment.diff.z;
+
+	if (dot == 0.0f) {
+		return false;
+	}
+
+	// 始点と法線の内積を求める
+	float originDot = segment.origin.x * plane.normal.x +
+		segment.origin.y * plane.normal.y +
+		segment.origin.z * plane.normal.z;
+
+	// tを求める
+	float t = (plane.distance - originDot) / dot;
+
+	if (t >= 0.0f && t <= 1.0f) {
+		return true; // 衝突している
+	}
+
+	return false; // 衝突していない
+}
+
 //法線と垂直なベクトルを1つ求める
 Vector3 Perpendicular(const Vector3& vector) {
 	if (vector.x != 0.0f || vector.y != 0.0f) {
@@ -266,11 +292,17 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
 
+	/*
 	// 球体の初期設定
-// 2つの球の初期化
 	Sphere sphere;
 	sphere.center = { 0.0f, 1.0f, 0.0f };
 	sphere.radius = 0.5f;
+	*/
+
+	// 線分の初期化
+	Segment segment;
+	segment.origin = { 0.0f, 1.0f, 0.0f }; 
+	segment.diff = { 0.0f, -2.0f, 0.0f };
 
 	Plane plane;
 	plane.normal = { 0.0f, 1.0f, 0.0f }; // 最初は上向き
@@ -294,6 +326,10 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		///
 		/// ↓更新処理ここから
 		///
+		
+		/*-------------------------------------
+		カメラの設定
+		--------------------------------------------*/
 		preMouseX = mouseX;
 		preMouseY = mouseY;
 
@@ -330,28 +366,34 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 			cameraTranslate.z += wheel * scrollSensitivity;
 		}
 
-
+		/*---------------------------------------------
+		Imgui
+		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
 		ImGui::Begin("Settings");
-		ImGui::Text("Sphere");
-		ImGui::DragFloat3("Center", &sphere.center.x, 0.01f);
-		ImGui::DragFloat("Radius", &sphere.radius, 0.01f);
+		ImGui::Text("Segment");
+		ImGui::DragFloat3("Origin", &segment.origin.x, 0.01f);
+		ImGui::DragFloat3("Diff", &segment.diff.x, 0.01f);
 
 		ImGui::Separator();
 
 		ImGui::Text("Plane");
 		ImGui::DragFloat3("Normal", &plane.normal.x, 0.01f);
-		plane.normal = Normalize(plane.normal);
+		plane.normal = Normalize(plane.normal); 
 		ImGui::DragFloat("Distance", &plane.distance, 0.01f);
 		ImGui::End();
 
-		// 衝突判定
-		bool isCollide = IsCollision(sphere, plane);
-		// 衝突していたら赤、していなければ白
-		unsigned int sphereColor = isCollide ? RED : WHITE;
+		// 衝突判定を行う
+		bool isCollide = IsCollision(segment, plane);
+
+		// 衝突していたら赤、していなければ白にする
+		unsigned int lineColor = isCollide ? RED : WHITE;
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
 
 
+		/*----------------------------------------------
+		行列計算
+		------------------------------------*/
 		Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraScale, cameraRotate, cameraTranslate);
 		Matrix4x4 viewMatrix = Inverse(cameraMatrix);
 
@@ -378,7 +420,18 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 
 		DrawPlane(plane, viewProjectionMatrix, viewportMatrix, WHITE);
-		DrawSphere(sphere, viewProjectionMatrix, viewportMatrix, sphereColor);
+		Vector3 startScreen = Transform(Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
+
+		// 終点を計算して変換
+		Vector3 endWorld = { segment.origin.x + segment.diff.x, segment.origin.y + segment.diff.y, segment.origin.z + segment.diff.z };
+		Vector3 endScreen = Transform(Transform(endWorld, viewProjectionMatrix), viewportMatrix);
+
+		// 判定結果の色で線を引く
+		Novice::DrawLine(
+			int(startScreen.x), int(startScreen.y),
+			int(endScreen.x), int(endScreen.y),
+			lineColor
+		);
 
 		///
 		/// ↑描画処理ここまで
