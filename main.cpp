@@ -263,6 +263,14 @@ bool IsCollision(const Triangle& triangle, const Segment& segment) {
 	return false;
 }
 
+// AABBの当たり判定
+bool IsCollision(const AABB& aabb1, const AABB& aabb2) {
+	if (aabb1.max.x < aabb2.min.x || aabb1.min.x > aabb2.max.x) return false;
+	if (aabb1.max.y < aabb2.min.y || aabb1.min.y > aabb2.max.y) return false;
+	if (aabb1.max.z < aabb2.min.z || aabb1.min.z > aabb2.max.z) return false;
+	return true; // 衝突している
+}
+
 //法線と垂直なベクトルを1つ求める
 Vector3 Perpendicular(const Vector3& vector) {
 	if (vector.x != 0.0f || vector.y != 0.0f) {
@@ -316,14 +324,6 @@ void DrawPlane(const Plane& plane, const Matrix4x4& viewProjectionMatrix, const 
 	Novice::DrawLine((int)points[2].x, (int)points[2].y, (int)points[1].x, (int)points[1].y, color);
 	Novice::DrawLine((int)points[1].x, (int)points[1].y, (int)points[3].x, (int)points[3].y, color);
 	Novice::DrawLine((int)points[3].x, (int)points[3].y, (int)points[0].x, (int)points[0].y, color);
-}
-
-// AABBの当たり判定
-bool IsCollision(const AABB& aabb1, const AABB& aabb2) {
-	if (aabb1.max.x < aabb2.min.x || aabb1.min.x > aabb2.max.x) return false;
-	if (aabb1.max.y < aabb2.min.y || aabb1.min.y > aabb2.max.y) return false;
-	if (aabb1.max.z < aabb2.min.z || aabb1.min.z > aabb2.max.z) return false;
-	return true; // 衝突している
 }
 
 // AABBの描画関数
