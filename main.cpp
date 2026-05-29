@@ -290,6 +290,70 @@ bool IsCollision(const AABB& aabb,const Sphere& sphere) {
 	return distanceSquared <= (sphere.radius * sphere.radius);
 }
 
+// AABBと線分の衝突判定
+bool IsCollision(const AABB& aabb, const Segment& segment) {
+	float tNearX, tFarX, tNearY, tFarY, tNearZ, tFarZ;
+
+	// --- X軸の判定 ---
+	if (segment.diff.x == 0.0f) {
+		if (segment.origin.x < aabb.min.x || segment.origin.x > aabb.max.x) return false;
+		tNearX = -INFINITY;
+		tFarX = INFINITY;
+	}
+	else {
+		float t1 = (aabb.min.x - segment.origin.x) / segment.diff.x;
+		float t2 = (aabb.max.x - segment.origin.x) / segment.diff.x;
+		tNearX = (std::min)(t1, t2);
+		tFarX = (std::max)(t1, t2);
+	}
+
+	// --- Y軸の判定 ---
+	if (segment.diff.y == 0.0f) {
+		if (segment.origin.y < aabb.min.y || segment.origin.y > aabb.max.y) return false;
+		tNearY = -INFINITY;
+		tFarY = INFINITY;
+	}
+	else {
+		float t1 = (aabb.min.y - segment.origin.y) / segment.diff.y;
+		float t2 = (aabb.max.y - segment.origin.y) / segment.diff.y;
+		tNearY = (std::min)(t1, t2);
+		tFarY = (std::max)(t1, t2);
+	}
+
+	// --- Z軸の判定 ---
+	if (segment.diff.z == 0.0f) {
+		if (segment.origin.z < aabb.min.z || segment.origin.z > aabb.max.z) return false;
+		tNearZ = -INFINITY;
+		tFarZ = INFINITY;
+	}
+	else {
+		float t1 = (aabb.min.z - segment.origin.z) / segment.diff.z;
+		float t2 = (aabb.max.z - segment.origin.z) / segment.diff.z;
+		tNearZ = (std::min)(t1, t2);
+		tFarZ = (std::max)(t1, t2);
+	}
+
+
+	float tmin = (std::max)((std::max)(tNearX, tNearY), tNearZ);
+
+	float tmax = (std::min)((std::min)(tFarX, tFarY), tFarZ);
+
+
+	if (tmin > tmax) {
+		return false;
+	}
+
+	// --- 線の種類ごとの判定 ---
+	if (tmax < 0.0f) {
+		return false;
+	}
+
+	if (tmin > 1.0f) {
+		return false;
+	}
+
+	return true;
+}
 
 //法線と垂直なベクトルを1つ求める
 Vector3 Perpendicular(const Vector3& vector) {
@@ -381,7 +445,7 @@ void DrawAABB(const AABB& aabb, const Matrix4x4& viewProjectionMatrix, const Mat
 	}
 }
 
-/*
+
 Vector3 Project(const Vector3& v1, const Vector3& v2) {
 	// 内積を計算
 	float dot = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
@@ -413,7 +477,7 @@ Vector3 ClosestPoint(const Vector3& point, const Segment& segment) {
 			 segment.origin.z + segment.diff.z * t };
 }
 
-*/
+
 
 
 
@@ -442,8 +506,8 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 	// 線分の初期化
 	Segment segment;
-	segment.origin = { 0.0f, 1.0f, 0.0f };
-	segment.diff = { 0.0f, -2.0f, 0.0f };
+	segment.origin = { -0.7f, 0.3f, 0.0f };
+	segment.diff = { 2.0f, -0.5f, 0.0f };
 
 	/*
 	// 平面
@@ -461,7 +525,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	// AABB
 	AABB aabb1{
 		.min = {-0.5f,-0.5f,-0.5f},
-		.max{0.0f,0.0f,0.0f},
+		.max{0.5f,0.5f,0.5f},
 	};
 
 	AABB aabb2{
@@ -532,17 +596,13 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
 		ImGui::Begin("Settings");
-
 		ImGui::Text("AABB");
-		ImGui::DragFloat3("AABB Min", &aabb1.min.x, 0.01f);
-		ImGui::DragFloat3("AABB Max", &aabb1.max.x, 0.01f);
-
+		ImGui::DragFloat3("Min", &aabb1.min.x, 0.01f);
+		ImGui::DragFloat3("Max", &aabb1.max.x, 0.01f);
 		ImGui::Separator();
-
-		ImGui::Text("Sphere");
-		ImGui::DragFloat3("Sphere Center", &sphere.center.x, 0.01f);
-		ImGui::DragFloat("Sphere Radius", &sphere.radius, 0.01f);
-
+		ImGui::Text("Segment");
+		ImGui::DragFloat3("Origin", &segment.origin.x, 0.01f);
+		ImGui::DragFloat3("Diff", &segment.diff.x, 0.01f);
 		ImGui::End();
 
 		// 衝突判定を行う
@@ -562,7 +622,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		aabb2.max.z = (std::max)(aabb2.min.z, aabb2.max.z);
 		*/
 
-		bool isColliding = IsCollision(aabb1, sphere);
+		bool isColliding = IsCollision(aabb1, segment);
 		uint32_t color = isColliding ? 0xFF0000FF : 0xFFFFFFFF;
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
@@ -594,10 +654,14 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 		// グリッドを描画
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
-
-		// AABBを描画
 		DrawAABB(aabb1, viewProjectionMatrix, viewportMatrix, color);
-		DrawSphere(sphere, viewProjectionMatrix, viewportMatrix, color);
+
+		// 線の描画
+		Vector3 startScreen = Transform(Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
+		Vector3 endWorld = { segment.origin.x + segment.diff.x, segment.origin.y + segment.diff.y, segment.origin.z + segment.diff.z };
+		Vector3 endScreen = Transform(Transform(endWorld, viewProjectionMatrix), viewportMatrix);
+		Novice::DrawLine(int(startScreen.x), int(startScreen.y), int(endScreen.x), int(endScreen.y), WHITE);
+		
 
 		
 		///
