@@ -271,6 +271,26 @@ bool IsCollision(const AABB& aabb1, const AABB& aabb2) {
 	return true; // 衝突している
 }
 
+// AABBと球の当たり判定
+bool IsCollision(const AABB& aabb,const Sphere& sphere) {
+	// 球の中心点とAABBの最近点を求める
+	Vector3 cloosePoint{
+		std::clamp(sphere.center.x, aabb.min.x, aabb.max.x),
+		std::clamp(sphere.center.y, aabb.min.y, aabb.max.y),
+		std::clamp(sphere.center.z, aabb.min.z, aabb.max.z)
+	};
+
+	// 最近点と球の中心点の距離を求める
+	float distanceX = cloosePoint.x - sphere.center.x;
+	float distanceY = cloosePoint.y - sphere.center.y;
+	float distanceZ = cloosePoint.z - sphere.center.z;
+
+	float distanceSquared = distanceX * distanceX + distanceY * distanceY + distanceZ * distanceZ;
+	// 距離が半径の二乗以下なら衝突
+	return distanceSquared <= (sphere.radius * sphere.radius);
+}
+
+
 //法線と垂直なベクトルを1つ求める
 Vector3 Perpendicular(const Vector3& vector) {
 	if (vector.x != 0.0f || vector.y != 0.0f) {
@@ -413,12 +433,12 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
 
-	/*
+	
 	// 球体の初期設定
 	Sphere sphere;
 	sphere.center = { 0.0f, 1.0f, 0.0f };
 	sphere.radius = 0.5f;
-	*/
+	
 
 	// 線分の初期化
 	Segment segment;
@@ -512,15 +532,16 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
 		ImGui::Begin("Settings");
+
+		ImGui::Text("AABB");
+		ImGui::DragFloat3("AABB Min", &aabb1.min.x, 0.01f);
+		ImGui::DragFloat3("AABB Max", &aabb1.max.x, 0.01f);
+
 		ImGui::Separator();
-		ImGui::Text("AABB 1");
-		ImGui::DragFloat3("AABB1 Min", &aabb1.min.x, 0.01f);
-		ImGui::DragFloat3("AABB1 Max", &aabb1.max.x, 0.01f);
 
-		ImGui::Text("AABB 2");
-		ImGui::DragFloat3("AABB2 Min", &aabb2.min.x, 0.01f);
-		ImGui::DragFloat3("AABB2 Max", &aabb2.max.x, 0.01f);
-
+		ImGui::Text("Sphere");
+		ImGui::DragFloat3("Sphere Center", &sphere.center.x, 0.01f);
+		ImGui::DragFloat("Sphere Radius", &sphere.radius, 0.01f);
 
 		ImGui::End();
 
@@ -532,15 +553,17 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		aabb1.min.z = (std::min)(aabb1.min.z, aabb1.max.z);
 		aabb1.max.z = (std::max)(aabb1.min.z, aabb1.max.z);
 
+		/*
 		aabb2.min.x = (std::min)(aabb2.min.x, aabb2.max.x);
 		aabb2.max.x = (std::max)(aabb2.min.x, aabb2.max.x);
 		aabb2.min.y = (std::min)(aabb2.min.y, aabb2.max.y);
 		aabb2.max.y = (std::max)(aabb2.min.y, aabb2.max.y);
 		aabb2.min.z = (std::min)(aabb2.min.z, aabb2.max.z);
 		aabb2.max.z = (std::max)(aabb2.min.z, aabb2.max.z);
+		*/
 
-		bool isColliding = IsCollision(aabb1, aabb2);
-		uint32_t lineColor = isColliding ? 0xFF0000FF : 0xF4FBFEFF;
+		bool isColliding = IsCollision(aabb1, sphere);
+		uint32_t color = isColliding ? 0xFF0000FF : 0xFFFFFFFF;
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
 
@@ -573,8 +596,8 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
 		// AABBを描画
-		DrawAABB(aabb1, viewProjectionMatrix, viewportMatrix, lineColor);
-		DrawAABB(aabb2, viewProjectionMatrix, viewportMatrix, lineColor);
+		DrawAABB(aabb1, viewProjectionMatrix, viewportMatrix, color);
+		DrawSphere(sphere, viewProjectionMatrix, viewportMatrix, color);
 
 		
 		///
