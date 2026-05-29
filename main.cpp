@@ -5,6 +5,7 @@
 #include<imgui.h>
 #define _USE_MATH_DEFINES
 #include <cmath>
+#include <algorithm>
 
 const char kWindowTitle[] = "LC1B_01_アオキレン_タイトル";
 
@@ -34,6 +35,12 @@ struct Plane {
 // 三角形
 struct Triangle {
 	Vector3 vertices[3];// 三つの頂点
+};
+
+// AABB判定
+struct AABB {
+	Vector3 min;// 最小点
+	Vector3 max;// 最大点
 };
 
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
@@ -253,7 +260,7 @@ bool IsCollision(const Triangle& triangle, const Segment& segment) {
 		return true; // 衝突！
 	}
 
-	return false; 
+	return false;
 }
 
 //法線と垂直なベクトルを1つ求める
@@ -309,6 +316,49 @@ void DrawPlane(const Plane& plane, const Matrix4x4& viewProjectionMatrix, const 
 	Novice::DrawLine((int)points[2].x, (int)points[2].y, (int)points[1].x, (int)points[1].y, color);
 	Novice::DrawLine((int)points[1].x, (int)points[1].y, (int)points[3].x, (int)points[3].y, color);
 	Novice::DrawLine((int)points[3].x, (int)points[3].y, (int)points[0].x, (int)points[0].y, color);
+}
+
+// AABBの当たり判定
+bool IsCollision(const AABB& aabb1, const AABB& aabb2) {
+	if (aabb1.max.x < aabb2.min.x || aabb1.min.x > aabb2.max.x) return false;
+	if (aabb1.max.y < aabb2.min.y || aabb1.min.y > aabb2.max.y) return false;
+	if (aabb1.max.z < aabb2.min.z || aabb1.min.z > aabb2.max.z) return false;
+	return true; // 衝突している
+}
+
+// AABBの描画関数
+void DrawAABB(const AABB& aabb, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
+	// 8頂点を求める
+	Vector3 vertices[8];
+	vertices[0] = { aabb.min.x, aabb.min.y, aabb.min.z };
+	vertices[1] = { aabb.max.x, aabb.min.y, aabb.min.z };
+	vertices[2] = { aabb.max.x, aabb.max.y, aabb.min.z };
+	vertices[3] = { aabb.min.x, aabb.max.y, aabb.min.z };
+	vertices[4] = { aabb.min.x, aabb.min.y, aabb.max.z };
+	vertices[5] = { aabb.max.x, aabb.min.y, aabb.max.z };
+	vertices[6] = { aabb.max.x, aabb.max.y, aabb.max.z };
+	vertices[7] = { aabb.min.x, aabb.max.y, aabb.max.z };
+	// 頂点をスクリーン座標に変換
+	Vector3 screenVertices[8];
+	for (int i = 0; i < 8; ++i) {
+		Vector3 ndcVertex = Transform(vertices[i], viewProjectionMatrix);
+		screenVertices[i] = Transform(ndcVertex, viewportMatrix);
+	}
+	// 線を引く
+	int indices[12][2] = {
+		{0,1}, {1,2}, {2,3}, {3,0},
+		{4,5}, {5,6}, {6,7}, {7,4},
+		{0,4}, {1,5}, {2,6}, {3,7}
+	};
+	for (int i = 0; i < 12; ++i) {
+		int index1 = indices[i][0];
+		int index2 = indices[i][1];
+		Novice::DrawLine(
+			int(screenVertices[index1].x), int(screenVertices[index1].y),
+			int(screenVertices[index2].x), int(screenVertices[index2].y),
+			color
+		);
+	}
 }
 
 /*
@@ -372,7 +422,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 	// 線分の初期化
 	Segment segment;
-	segment.origin = { 0.0f, 1.0f, 0.0f }; 
+	segment.origin = { 0.0f, 1.0f, 0.0f };
 	segment.diff = { 0.0f, -2.0f, 0.0f };
 
 	/*
@@ -387,6 +437,17 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	triangle.vertices[0] = { 0.0f, 1.0f, 0.0f };
 	triangle.vertices[1] = { -1.0f, -0.5f, 0.0f };
 	triangle.vertices[2] = { 1.0f, -0.5f, 0.0f };
+
+	// AABB
+	AABB aabb1{
+		.min = {-0.5f,-0.5f,-0.5f},
+		.max{0.0f,0.0f,0.0f},
+	};
+
+	AABB aabb2{
+		.min{0.2f,0.2f,0.2f},
+		.max{1.0f,1.0f,1.0f},
+	};
 
 	// マウス操作用
 	int mouseX = 0;
@@ -406,7 +467,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		///
 		/// ↓更新処理ここから
 		///
-		
+
 		/*-------------------------------------
 		カメラの設定
 		--------------------------------------------*/
@@ -451,21 +512,36 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
 		ImGui::Begin("Settings");
-		ImGui::Text("Segment");
-		ImGui::DragFloat3("Origin", &segment.origin.x, 0.01f);
-		ImGui::DragFloat3("Diff", &segment.diff.x, 0.01f);
-
 		ImGui::Separator();
+		ImGui::Text("AABB 1");
+		ImGui::DragFloat3("AABB1 Min", &aabb1.min.x, 0.01f);
+		ImGui::DragFloat3("AABB1 Max", &aabb1.max.x, 0.01f);
 
-		ImGui::Text("Triangle");
-		ImGui::DragFloat3("Vertex 0", &triangle.vertices[0].x, 0.01f);
-		ImGui::DragFloat3("Vertex 1", &triangle.vertices[1].x, 0.01f);
-		ImGui::DragFloat3("Vertex 2", &triangle.vertices[2].x, 0.01f);
+		ImGui::Text("AABB 2");
+		ImGui::DragFloat3("AABB2 Min", &aabb2.min.x, 0.01f);
+		ImGui::DragFloat3("AABB2 Max", &aabb2.max.x, 0.01f);
+
+
 		ImGui::End();
 
 		// 衝突判定を行う
-		bool isCollide = IsCollision(triangle, segment);
-		unsigned int lineColor = isCollide ? RED : WHITE;
+		aabb1.min.x = (std::min)(aabb1.min.x, aabb1.max.x);
+		aabb1.max.x = (std::max)(aabb1.min.x, aabb1.max.x);
+		aabb1.min.y = (std::min)(aabb1.min.y, aabb1.max.y);
+		aabb1.max.y = (std::max)(aabb1.min.y, aabb1.max.y);
+		aabb1.min.z = (std::min)(aabb1.min.z, aabb1.max.z);
+		aabb1.max.z = (std::max)(aabb1.min.z, aabb1.max.z);
+
+		aabb2.min.x = (std::min)(aabb2.min.x, aabb2.max.x);
+		aabb2.max.x = (std::max)(aabb2.min.x, aabb2.max.x);
+		aabb2.min.y = (std::min)(aabb2.min.y, aabb2.max.y);
+		aabb2.max.y = (std::max)(aabb2.min.y, aabb2.max.y);
+		aabb2.min.z = (std::min)(aabb2.min.z, aabb2.max.z);
+		aabb2.max.z = (std::max)(aabb2.min.z, aabb2.max.z);
+
+		bool isColliding = IsCollision(aabb1, aabb2);
+		uint32_t lineColor = isColliding ? 0xFF0000FF : 0xF4FBFEFF;
+
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
 
 
@@ -496,14 +572,11 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		// グリッドを描画
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
+		// AABBを描画
+		DrawAABB(aabb1, viewProjectionMatrix, viewportMatrix, lineColor);
+		DrawAABB(aabb2, viewProjectionMatrix, viewportMatrix, lineColor);
 
-		DrawTriangle(triangle, viewProjectionMatrix, viewportMatrix, 0xAAAAAAFF);
-
-		// 終点を計算して変換
-		Vector3 startScreen = Transform(Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
-		Vector3 endWorld = { segment.origin.x + segment.diff.x, segment.origin.y + segment.diff.y, segment.origin.z + segment.diff.z };
-		Vector3 endScreen = Transform(Transform(endWorld, viewProjectionMatrix), viewportMatrix);
-		Novice::DrawLine(int(startScreen.x), int(startScreen.y), int(endScreen.x), int(endScreen.y), lineColor);
+		
 		///
 		/// ↑描画処理ここまで
 		///
