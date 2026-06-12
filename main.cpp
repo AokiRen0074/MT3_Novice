@@ -163,6 +163,34 @@ void DrawSphere(const Sphere& sphere, const Matrix4x4& viewProjectionMatrix, con
 	}
 }
 
+
+// 分離軸をみつける
+bool TestSeparatingAxis(const Vector3& axis, const OBB& obb1, const OBB& obb2) {
+	
+	float lengthSq = axis.x * axis.x + axis.y * axis.y + axis.z * axis.z;
+	if (lengthSq <= 0.00001f) return false;
+
+	// 軸を正規化
+	Vector3 nAxis = { axis.x / std::sqrt(lengthSq), axis.y / std::sqrt(lengthSq), axis.z / std::sqrt(lengthSq) };
+
+	// 中心間の距離ベクトルを軸に投影
+	Vector3 centerDiff = { obb2.center.x - obb1.center.x, obb2.center.y - obb1.center.y, obb2.center.z - obb1.center.z };
+	float distance = std::abs(centerDiff.x * nAxis.x + centerDiff.y * nAxis.y + centerDiff.z * nAxis.z);
+
+	//  OBB1の投影半径
+	float r1 = obb1.size.x * std::abs(obb1.orientations[0].x * nAxis.x + obb1.orientations[0].y * nAxis.y + obb1.orientations[0].z * nAxis.z) +
+		obb1.size.y * std::abs(obb1.orientations[1].x * nAxis.x + obb1.orientations[1].y * nAxis.y + obb1.orientations[1].z * nAxis.z) +
+		obb1.size.z * std::abs(obb1.orientations[2].x * nAxis.x + obb1.orientations[2].y * nAxis.y + obb1.orientations[2].z * nAxis.z);
+
+	// OBB2の投影半径
+	float r2 = obb2.size.x * std::abs(obb2.orientations[0].x * nAxis.x + obb2.orientations[0].y * nAxis.y + obb2.orientations[0].z * nAxis.z) +
+		obb2.size.y * std::abs(obb2.orientations[1].x * nAxis.x + obb2.orientations[1].y * nAxis.y + obb2.orientations[1].z * nAxis.z) +
+		obb2.size.z * std::abs(obb2.orientations[2].x * nAxis.x + obb2.orientations[2].y * nAxis.y + obb2.orientations[2].z * nAxis.z);
+
+
+	return distance > (r1 + r2);
+}
+
 // 球と球の当たり判定
 bool IsCollision(const Sphere& s1, const Sphere& s2) {
 	// 中心点間の距離を求める
@@ -431,6 +459,41 @@ bool IsCollision(const OBB& obb, const Segment& segment) {
 	return IsCollision(localAABB, localSegment);
 }
 
+// OBBとOBBの当たり判定
+bool IsCollision(const OBB& obb1, const OBB& obb2) {
+	// 15本の軸を格納する配列
+	Vector3 axes[15];
+
+	// OBB1のローカル軸 
+	axes[0] = obb1.orientations[0];
+	axes[1] = obb1.orientations[1];
+	axes[2] = obb1.orientations[2];
+
+	// OBB2のローカル軸 
+	axes[3] = obb2.orientations[0];
+	axes[4] = obb2.orientations[1];
+	axes[5] = obb2.orientations[2];
+
+	// OBB1とOBB2のローカル軸のクロス積 
+	int axisIndex = 6;
+	for (int i = 0; i < 3; ++i) {
+		for (int j = 0; j < 3; ++j) {
+			axes[axisIndex++] = Cross(obb1.orientations[i], obb2.orientations[j]);
+		}
+	}
+
+	// 15本の軸すべてに対して、分離軸になっているか
+	for (int i = 0; i < 15; ++i) {
+		// 分離軸が見つかったら、隙間があるので衝突していない
+		if (TestSeparatingAxis(axes[i], obb1, obb2)) {
+			return false;
+		}
+	}
+
+	// すべての軸で影が重なっていたら、衝突している
+	return true;
+}
+
 //法線と垂直なベクトルを1つ求める
 Vector3 Perpendicular(const Vector3& vector) {
 	if (vector.x != 0.0f || vector.y != 0.0f) {
@@ -611,16 +674,19 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
 
-	Vector3 obbRotate = { 0.0f, 0.0f, 0.0f }; // OBBの回転角
+	Vector3 obbRotate1 = { 0.0f, 0.0f, 0.0f };
+	Vector3 obbRotate2 = { -0.05f, -2.49f, 0.15f };
 
-	OBB obb{
-			.center = {-1.0f, 0.0f, 0.0f},
-			.orientations = {
-				{1.0f, 0.0f, 0.0f},
-				{0.0f, 1.0f, 0.0f},
-				{0.0f, 0.0f, 1.0f}
-			},
-			.size = {0.5f, 0.5f, 0.5f}
+	OBB obb1{
+		.center = {0.0f, 0.0f, 0.0f},
+		.orientations = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+		.size = {0.83f, 0.26f, 0.24f}
+	};
+
+	OBB obb2{
+		.center = {0.9f, 0.0f, 0.78f},
+		.orientations = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+		.size = {0.5f, 0.37f, 0.5f}
 	};
 	
 	/*
@@ -630,12 +696,14 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	sphere.radius = 0.5f;
 	*/
 	
-
+	/*
 	// 線分の初期化 
 	Segment segment{
 			.origin = {-0.8f, -0.3f, 0.0f},
 			.diff = {0.5f, 0.5f, 0.5f}
 	};
+	*/
+
 	/*
 	// 平面
 	Plane plane;
@@ -727,25 +795,34 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
 		ImGui::Begin("Settings");
-		ImGui::Text("OBB");
-		ImGui::DragFloat3("OBB Center", &obb.center.x, 0.01f);
-		ImGui::DragFloat3("OBB Size", &obb.size.x, 0.01f);
-		ImGui::DragFloat3("OBB Rotate", &obbRotate.x, 0.01f);
-
+		ImGui::Text("OBB 1");
+		ImGui::DragFloat3("Center1", &obb1.center.x, 0.01f);
+		ImGui::DragFloat3("Size1", &obb1.size.x, 0.01f);
+		ImGui::DragFloat3("Rotate1", &obbRotate1.x, 0.01f);
 		ImGui::Separator();
-		ImGui::Text("Segment");
-		ImGui::DragFloat3("Segment Origin", &segment.origin.x, 0.01f);
-		ImGui::DragFloat3("Segment Diff", &segment.diff.x, 0.01f);
+		ImGui::Text("OBB 2");
+		ImGui::DragFloat3("Center2", &obb2.center.x, 0.01f);
+		ImGui::DragFloat3("Size2", &obb2.size.x, 0.01f);
+		ImGui::DragFloat3("Rotate2", &obbRotate2.x, 0.01f);
 		ImGui::End();
 
-		// OBBの回転行列の更新
-		Matrix4x4 rotateMatrix = Multiply(MakeRotateXMatrix(obbRotate.x), Multiply(MakeRotateYMatrix(obbRotate.y), MakeRotateZMatrix(obbRotate.z)));
-		obb.orientations[0].x = rotateMatrix.m[0][0]; obb.orientations[0].y = rotateMatrix.m[0][1]; obb.orientations[0].z = rotateMatrix.m[0][2];
-		obb.orientations[1].x = rotateMatrix.m[1][0]; obb.orientations[1].y = rotateMatrix.m[1][1]; obb.orientations[1].z = rotateMatrix.m[1][2];
-		obb.orientations[2].x = rotateMatrix.m[2][0]; obb.orientations[2].y = rotateMatrix.m[2][1]; obb.orientations[2].z = rotateMatrix.m[2][2];
+		obb1.size.x = std::abs(obb1.size.x); obb1.size.y = std::abs(obb1.size.y); obb1.size.z = std::abs(obb1.size.z);
+		obb2.size.x = std::abs(obb2.size.x); obb2.size.y = std::abs(obb2.size.y); obb2.size.z = std::abs(obb2.size.z);
+
+		// OBB1の回転行列と方向ベクトルの更新
+		Matrix4x4 rotateMatrix1 = Multiply(MakeRotateXMatrix(obbRotate1.x), Multiply(MakeRotateYMatrix(obbRotate1.y), MakeRotateZMatrix(obbRotate1.z)));
+		obb1.orientations[0] = { rotateMatrix1.m[0][0], rotateMatrix1.m[0][1], rotateMatrix1.m[0][2] };
+		obb1.orientations[1] = { rotateMatrix1.m[1][0], rotateMatrix1.m[1][1], rotateMatrix1.m[1][2] };
+		obb1.orientations[2] = { rotateMatrix1.m[2][0], rotateMatrix1.m[2][1], rotateMatrix1.m[2][2] };
+
+		// OBB2の回転行列と方向ベクトルの更新
+		Matrix4x4 rotateMatrix2 = Multiply(MakeRotateXMatrix(obbRotate2.x), Multiply(MakeRotateYMatrix(obbRotate2.y), MakeRotateZMatrix(obbRotate2.z)));
+		obb2.orientations[0] = { rotateMatrix2.m[0][0], rotateMatrix2.m[0][1], rotateMatrix2.m[0][2] };
+		obb2.orientations[1] = { rotateMatrix2.m[1][0], rotateMatrix2.m[1][1], rotateMatrix2.m[1][2] };
+		obb2.orientations[2] = { rotateMatrix2.m[2][0], rotateMatrix2.m[2][1], rotateMatrix2.m[2][2] };
 
 		// 衝突判定
-		bool isColliding = IsCollision(obb, segment);
+		bool isColliding = IsCollision(obb1, obb2);
 		uint32_t color = isColliding ? 0xFF0000FF : 0xFFFFFFFF;
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
@@ -778,14 +855,9 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		// グリッドを描画
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
-		// OBBを描画
-		DrawOBB(obb, viewProjectionMatrix, viewportMatrix, color);
-
-		// 線の描画
-		Vector3 startScreen = Transform(Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
-		Vector3 endWorld = { segment.origin.x + segment.diff.x, segment.origin.y + segment.diff.y, segment.origin.z + segment.diff.z };
-		Vector3 endScreen = Transform(Transform(endWorld, viewProjectionMatrix), viewportMatrix);
-		Novice::DrawLine(int(startScreen.x), int(startScreen.y), int(endScreen.x), int(endScreen.y), color);
+		DrawGrid(viewProjectionMatrix, viewportMatrix);
+		DrawOBB(obb1, viewProjectionMatrix, viewportMatrix, color);
+		DrawOBB(obb2, viewProjectionMatrix, viewportMatrix, color);
 		
 		///
 		/// ↑描画処理ここまで
