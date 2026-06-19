@@ -50,6 +50,15 @@ struct OBB {
 	Vector3 size;
 };
 
+// 線形補完
+Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t) {
+	return {
+	v1.x + (v2.x - v1.x) * t,
+	v1.y + (v2.y - v1.y) * t,
+	v1.z + (v2.z - v1.z) * t
+	};
+}
+
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
 	const float kGridHalfWidth = 2.0f;                                      // Gridの半分の幅
 	const uint32_t kSubdivision = 10;                                       // 分割数
@@ -623,6 +632,39 @@ void DrawOBB(const OBB& obb, const Matrix4x4 viewProjectionMatrix, const Matrix4
 	}
 }
 
+// 2自ベジェ曲線の描画関数
+void DrawBezier(const Vector3& controlPoint0, const Vector3& controlPoint1, const Vector3& controlPoint2,
+	const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
+
+	// 曲線の分割数
+	const int kSubdivision = 32;
+
+	Vector3 prevScreenPoint;
+
+	for (int i = 0; i <= kSubdivision; ++i) {
+		float t = (float)i / kSubdivision;
+
+		Vector3 p0p1 = Lerp(controlPoint0, controlPoint1, t);
+		Vector3 p1p2 = Lerp(controlPoint1, controlPoint2, t);
+
+		Vector3 p = Lerp(p0p1, p1p2, t);
+
+		// 点をスクリーン座標に変換
+		Vector3 screenP = Transform(Transform(p, viewProjectionMatrix), viewportMatrix);
+
+		if (i > 0) {
+			Novice::DrawLine(
+				(int)prevScreenPoint.x, (int)prevScreenPoint.y,
+				(int)screenP.x, (int)screenP.y,
+				color
+			);
+		}
+		prevScreenPoint = screenP;
+	}
+}
+
+
+
 Vector3 Project(const Vector3& v1, const Vector3& v2) {
 	// 内積を計算
 	float dot = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
@@ -674,9 +716,19 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
 
+	// ベジェ曲線
+	Vector3 controlPoints[3] = {
+		{-0.8f,0.58f,1.0f},
+		{1.70f,1.0f,-0.3f },
+		{0.94f,-0.7f,2.3f},
+	};
+
+	/*
 	Vector3 obbRotate1 = { 0.0f, 0.0f, 0.0f };
 	Vector3 obbRotate2 = { -0.05f, -2.49f, 0.15f };
+	*/
 
+	/*
 	OBB obb1{
 		.center = {0.0f, 0.0f, 0.0f},
 		.orientations = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
@@ -688,6 +740,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		.orientations = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
 		.size = {0.5f, 0.37f, 0.5f}
 	};
+	*/
 	
 	/*
 	// 球体の初期設定
@@ -795,35 +848,12 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
 		ImGui::Begin("Settings");
-		ImGui::Text("OBB 1");
-		ImGui::DragFloat3("Center1", &obb1.center.x, 0.01f);
-		ImGui::DragFloat3("Size1", &obb1.size.x, 0.01f);
-		ImGui::DragFloat3("Rotate1", &obbRotate1.x, 0.01f);
-		ImGui::Separator();
-		ImGui::Text("OBB 2");
-		ImGui::DragFloat3("Center2", &obb2.center.x, 0.01f);
-		ImGui::DragFloat3("Size2", &obb2.size.x, 0.01f);
-		ImGui::DragFloat3("Rotate2", &obbRotate2.x, 0.01f);
+		ImGui::Text("Bezier Control Points");
+		ImGui::DragFloat3("Point 0", &controlPoints[0].x, 0.01f);
+		ImGui::DragFloat3("Point 1", &controlPoints[1].x, 0.01f);
+		ImGui::DragFloat3("Point 2", &controlPoints[2].x, 0.01f);
 		ImGui::End();
 
-		obb1.size.x = std::abs(obb1.size.x); obb1.size.y = std::abs(obb1.size.y); obb1.size.z = std::abs(obb1.size.z);
-		obb2.size.x = std::abs(obb2.size.x); obb2.size.y = std::abs(obb2.size.y); obb2.size.z = std::abs(obb2.size.z);
-
-		// OBB1の回転行列と方向ベクトルの更新
-		Matrix4x4 rotateMatrix1 = Multiply(MakeRotateXMatrix(obbRotate1.x), Multiply(MakeRotateYMatrix(obbRotate1.y), MakeRotateZMatrix(obbRotate1.z)));
-		obb1.orientations[0] = { rotateMatrix1.m[0][0], rotateMatrix1.m[0][1], rotateMatrix1.m[0][2] };
-		obb1.orientations[1] = { rotateMatrix1.m[1][0], rotateMatrix1.m[1][1], rotateMatrix1.m[1][2] };
-		obb1.orientations[2] = { rotateMatrix1.m[2][0], rotateMatrix1.m[2][1], rotateMatrix1.m[2][2] };
-
-		// OBB2の回転行列と方向ベクトルの更新
-		Matrix4x4 rotateMatrix2 = Multiply(MakeRotateXMatrix(obbRotate2.x), Multiply(MakeRotateYMatrix(obbRotate2.y), MakeRotateZMatrix(obbRotate2.z)));
-		obb2.orientations[0] = { rotateMatrix2.m[0][0], rotateMatrix2.m[0][1], rotateMatrix2.m[0][2] };
-		obb2.orientations[1] = { rotateMatrix2.m[1][0], rotateMatrix2.m[1][1], rotateMatrix2.m[1][2] };
-		obb2.orientations[2] = { rotateMatrix2.m[2][0], rotateMatrix2.m[2][1], rotateMatrix2.m[2][2] };
-
-		// 衝突判定
-		bool isColliding = IsCollision(obb1, obb2);
-		uint32_t color = isColliding ? 0xFF0000FF : 0xFFFFFFFF;
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
 
@@ -855,9 +885,15 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		// グリッドを描画
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
-		DrawGrid(viewProjectionMatrix, viewportMatrix);
-		DrawOBB(obb1, viewProjectionMatrix, viewportMatrix, color);
-		DrawOBB(obb2, viewProjectionMatrix, viewportMatrix, color);
+		DrawBezier(controlPoints[0], controlPoints[1], controlPoints[2], viewProjectionMatrix, viewportMatrix, 0xFF0000FF);
+
+		Sphere p0 = { controlPoints[0], 0.01f };
+		Sphere p1 = { controlPoints[1], 0.01f };
+		Sphere p2 = { controlPoints[2], 0.01f };
+
+		DrawSphere(p0, viewProjectionMatrix, viewportMatrix, 0x000000FF);
+		DrawSphere(p1, viewProjectionMatrix, viewportMatrix, 0x000000FF);
+		DrawSphere(p2, viewProjectionMatrix, viewportMatrix, 0x000000FF);
 		
 		///
 		/// ↑描画処理ここまで
