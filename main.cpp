@@ -716,12 +716,31 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
 
+	Vector3 translates[3] = {
+	{0.2f, 1.0f, 0.0f},
+	{0.4f, 0.0f, 0.0f},
+	{0.3f, 0.0f, 0.0f},
+	};
+	Vector3 rotates[3] = {
+		{0.0f, 0.0f, -0.8f},
+		{0.0f, 0.0f, -1.4f},
+		{0.0f, 0.0f, 0.0f },
+	};
+	Vector3 scales[3] = {
+		{1.0f, 1.0f, 1.0f},
+		{1.0f, 1.0f, 1.0f},
+		{1.0f, 1.0f, 1.0f}
+	};
+
+
+	/*
 	// ベジェ曲線
 	Vector3 controlPoints[3] = {
 		{-0.8f,0.58f,1.0f},
 		{1.70f,1.0f,-0.3f },
 		{0.94f,-0.7f,2.3f},
 	};
+	*/
 
 	/*
 	Vector3 obbRotate1 = { 0.0f, 0.0f, 0.0f };
@@ -847,13 +866,43 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		Imgui
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
-		ImGui::Begin("Settings");
-		ImGui::Text("Bezier Control Points");
-		ImGui::DragFloat3("Point 0", &controlPoints[0].x, 0.01f);
-		ImGui::DragFloat3("Point 1", &controlPoints[1].x, 0.01f);
-		ImGui::DragFloat3("Point 2", &controlPoints[2].x, 0.01f);
+		ImGui::Begin("Window");
+		ImGui::Text("Shoulder (Parent)");
+		ImGui::DragFloat3("Shoulder Translate", &translates[0].x, 0.01f);
+		ImGui::DragFloat3("Shoulder Rotate", &rotates[0].x, 0.01f);
+		ImGui::DragFloat3("Shoulder Scale", &scales[0].x, 0.01f);
+		ImGui::Separator();
+		ImGui::Text("Elbow (Child)");
+		ImGui::DragFloat3("Elbow Translate", &translates[1].x, 0.01f);
+		ImGui::DragFloat3("Elbow Rotate", &rotates[1].x, 0.01f);
+		ImGui::DragFloat3("Elbow Scale", &scales[1].x, 0.01f);
+		ImGui::Separator();
+		ImGui::Text("Hand (Grandchild)");
+		ImGui::DragFloat3("Hand Translate", &translates[2].x, 0.01f);
+		ImGui::DragFloat3("Hand Rotate", &rotates[2].x, 0.01f);
+		ImGui::DragFloat3("Hand Scale", &scales[2].x, 0.01f);
 		ImGui::End();
 
+		Matrix4x4 localMatrix[3];
+		Matrix4x4 worldMatrix[3];
+
+		for (int i = 0; i < 3; ++i) {
+			// 各関節のローカル行列を作成
+			localMatrix[i] = MakeAffineMatrix(scales[i], rotates[i], translates[i]);
+		}
+
+		//  親子関係の適用
+		worldMatrix[0] = localMatrix[0]; // 肩
+		worldMatrix[1] = Multiply(localMatrix[1], worldMatrix[0]); // 肘 
+		worldMatrix[2] = Multiply(localMatrix[2], worldMatrix[1]); // 手 
+
+		// ワールド行列からワールド座標
+		Vector3 worldPos[3];
+		for (int i = 0; i < 3; ++i) {
+			worldPos[i].x = worldMatrix[i].m[3][0];
+			worldPos[i].y = worldMatrix[i].m[3][1];
+			worldPos[i].z = worldMatrix[i].m[3][2];
+		}
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
 
@@ -885,15 +934,24 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		// グリッドを描画
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
-		DrawBezier(controlPoints[0], controlPoints[1], controlPoints[2], viewProjectionMatrix, viewportMatrix, 0xFF0000FF);
+		Sphere shoulderSphere = { worldPos[0], 0.05f }; // 肩
+		Sphere elbowSphere = { worldPos[1], 0.05f }; // 肘
+		Sphere handSphere = { worldPos[2], 0.05f }; // 手
 
-		Sphere p0 = { controlPoints[0], 0.01f };
-		Sphere p1 = { controlPoints[1], 0.01f };
-		Sphere p2 = { controlPoints[2], 0.01f };
+		DrawSphere(shoulderSphere, viewProjectionMatrix, viewportMatrix, 0xFF0000FF); // 赤
+		DrawSphere(elbowSphere, viewProjectionMatrix, viewportMatrix, 0x00FF00FF);    // 緑
+		DrawSphere(handSphere, viewProjectionMatrix, viewportMatrix, 0x0000FFFF);     // 青
 
-		DrawSphere(p0, viewProjectionMatrix, viewportMatrix, 0x000000FF);
-		DrawSphere(p1, viewProjectionMatrix, viewportMatrix, 0x000000FF);
-		DrawSphere(p2, viewProjectionMatrix, viewportMatrix, 0x000000FF);
+		// 関節間を線で結ぶ（
+		Vector3 screenPos[3];
+		for (int i = 0; i < 3; ++i) {
+			screenPos[i] = Transform(Transform(worldPos[i], viewProjectionMatrix), viewportMatrix);
+		}
+		// 肩と肘を結ぶ
+		Novice::DrawLine((int)screenPos[0].x, (int)screenPos[0].y, (int)screenPos[1].x, (int)screenPos[1].y, 0xFFFFFFFF);
+		// 肘と手を結ぶ
+		Novice::DrawLine((int)screenPos[1].x, (int)screenPos[1].y, (int)screenPos[2].x, (int)screenPos[2].y, 0xFFFFFFFF);
+
 		
 		///
 		/// ↑描画処理ここまで
