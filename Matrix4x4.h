@@ -56,6 +56,10 @@ Vector3 Transform(const Vector3& vector, const Matrix4x4& matrix);
 // 4x4　X軸回転行列
 Matrix4x4 MakeRotateXMatrix(float radian);
 
+inline Matrix4x4 operator*(const Matrix4x4& m1, const Matrix4x4& m2) {
+	return Multiply(m1, m2);
+}
+
 // 4x4　Y軸回転行列
 Matrix4x4 MakeRotateYMatrix(float radian);
 
