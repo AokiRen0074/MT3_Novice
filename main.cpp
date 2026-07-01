@@ -50,6 +50,22 @@ struct OBB {
 	Vector3 size;
 };
 
+struct Spring {
+	Vector3 anchor;             // アンカー。
+	float naturalLength;        // 自然長
+	float stiffness;            // 剛性。バネ定数k
+	float dampingCoefficient;   // 減衰係数
+};
+
+struct Ball {
+	Vector3 position;           // ボールの位置
+	Vector3 velocity;           // ボールの速度
+	Vector3 acceleration;       // ボールの加速度
+	float mass;                 // ボールの質量
+	float radius;               // ボールの半径
+	unsigned int color;         // ボールの色
+};
+
 // 線形補完
 Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t) {
 	return {
@@ -696,10 +712,12 @@ Vector3 ClosestPoint(const Vector3& point, const Segment& segment) {
 			 segment.origin.z + segment.diff.z * t };
 }
 
-Vector3 operator+(const Vector3& v1, const Vector3& v2) { return Add(v1, v2); }
-Vector3 operator-(const Vector3& v1, const Vector3& v2) { return Subtract(v1, v2); }
-Vector3 operator*(float s, const Vector3& v) { return Multiply(s, v); }
-
+Vector3 operator+(const Vector3& v1, const Vector3& v2) { return { v1.x + v2.x, v1.y + v2.y, v1.z + v2.z }; }
+Vector3 operator-(const Vector3& v1, const Vector3& v2) { return { v1.x - v2.x, v1.y - v2.y, v1.z - v2.z }; }
+Vector3 operator*(float s, const Vector3& v) { return { s * v.x, s * v.y, s * v.z }; }
+Vector3 operator*(const Vector3& v, float s) { return { v.x * s, v.y * s, v.z * s }; }
+Vector3 operator/(const Vector3& v, float s) { return { v.x / s, v.y / s, v.z / s }; }
+Vector3 operator-(const Vector3& v) { return { -v.x, -v.y, -v.z }; }
 
 
 
@@ -719,6 +737,24 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
 
+
+	Spring spring{};
+	spring.anchor = { 0.0f, 0.0f, 0.0f };
+	spring.naturalLength = 1.0f;
+	spring.stiffness = 100.0f;
+	spring.dampingCoefficient = 2.0f;
+
+	Ball ball{};
+	ball.position = { 1.2f, 0.0f, 0.0f };
+	ball.velocity = { 0.0f, 0.0f, 0.0f };
+	ball.acceleration = { 0.0f, 0.0f, 0.0f };
+	ball.mass = 2.0f;
+	ball.radius = 0.05f;
+	ball.color = 0x0000FFFF; // BLUE
+
+	bool isStart = false; 
+
+	/*
 	Vector3 a{ 0.2f,1.0f,0.0f };
 	Vector3 b{ 2.4f,3.1f,1.2f };
 
@@ -731,6 +767,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Matrix4x4 rotateYMatrix = MakeRotateYMatrix(rotate.y);
 	Matrix4x4 rotateZMatrix = MakeRotateXMatrix(rotate.z);
 	Matrix4x4 rotateMatrix = rotateXMatrix * rotateYMatrix * rotateZMatrix;
+	*/
 
 	/*
 	Vector3 translates[3] = {
@@ -883,17 +920,67 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		Imgui
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
-		ImGui::Begin("Window");
-		ImGui::Text("c:%f, %f,%f",c.x,c.y,c.z);
-		ImGui::Text("d:%f, %f,%f",d.x,d.y,d.z);
-		ImGui::Text("e:%f, %f,%f",e.x,e.y,e.z);
-		ImGui::Text("matrix:\n%f,%f,%f,\n%f,%f,%f,\n%f,%f,%f,\n%f,%f,%f\n",
-			rotateMatrix.m[0][0], rotateMatrix.m[0][1], rotateMatrix.m[0][2], rotateMatrix.m[0][3],
-			rotateMatrix.m[1][0], rotateMatrix.m[1][1], rotateMatrix.m[1][2], rotateMatrix.m[1][3],
-			rotateMatrix.m[2][0], rotateMatrix.m[2][1], rotateMatrix.m[2][2], rotateMatrix.m[2][3],
-			rotateMatrix.m[3][0], rotateMatrix.m[3][1], rotateMatrix.m[3][2], rotateMatrix.m[3][3]);
+		ImGui::Begin("Spring Settings");
+
+		// スタート/リセットボタン
+		if (ImGui::Button(isStart ? "Stop & Reset" : "Start!")) {
+			isStart = !isStart;
+			if (!isStart) {
+				// リセット時の位置・速度・加速度
+				ball.position = { 1.2f, 0.0f, 0.0f };
+				ball.velocity = { 0.0f, 0.0f, 0.0f };
+				ball.acceleration = { 0.0f, 0.0f, 0.0f };
+			}
+		}
+
+		ImGui::Separator();
+		ImGui::DragFloat3("Anchor", &spring.anchor.x, 0.01f);
+		ImGui::DragFloat("Natural Length", &spring.naturalLength, 0.01f);
+		ImGui::DragFloat("Stiffness (k)", &spring.stiffness, 0.1f);
+		ImGui::DragFloat("Damping", &spring.dampingCoefficient, 0.01f);
+		ImGui::Separator();
+		// シミュレーションが止まっている時だけ位置を手動で動かせるようにする
+		if (!isStart) {
+			ImGui::DragFloat3("Ball Position", &ball.position.x, 0.01f);
+		}
+		else {
+			ImGui::Text("Ball Position: %.2f, %.2f, %.2f", ball.position.x, ball.position.y, ball.position.z);
+		}
+		ImGui::DragFloat("Ball Mass", &ball.mass, 0.01f);
 		ImGui::End();
 
+
+		if (isStart) {
+			float deltaTime = 1.0f / 60.0f; 
+
+			Vector3 diff = ball.position - spring.anchor;
+			float length = Length(diff);
+
+			if (length != 0.0f) {
+				Vector3 direction = Normalize(diff);
+				// 自然長での休止位置を求める
+				Vector3 restPosition = spring.anchor + direction * spring.naturalLength;
+
+				// 変位
+				Vector3 displacement = ball.position - restPosition;
+
+				// フックの法則による復元力
+				Vector3 restoringForce = -spring.stiffness * displacement;
+
+				// 減衰力
+				Vector3 dampingForce = -spring.dampingCoefficient * ball.velocity;
+
+				// 物体にかかる合力
+				Vector3 force = restoringForce + dampingForce;
+
+				// 加速度
+				ball.acceleration = force / ball.mass;
+			}
+
+			// 速度と位置の更新
+			ball.velocity = ball.velocity + ball.acceleration * deltaTime;
+			ball.position = ball.position + ball.velocity * deltaTime;
+		}
 
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
@@ -925,6 +1012,16 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 		// グリッドを描画
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
+
+		Vector3 screenAnchor = Transform(Transform(spring.anchor, viewProjectionMatrix), viewportMatrix);
+		Vector3 screenBall = Transform(Transform(ball.position, viewProjectionMatrix), viewportMatrix);
+		Novice::DrawLine((int)screenAnchor.x, (int)screenAnchor.y, (int)screenBall.x, (int)screenBall.y, 0xFFFFFFFF);
+
+		// ボールを描画
+		Sphere renderSphere;
+		renderSphere.center = ball.position;
+		renderSphere.radius = ball.radius;
+		DrawSphere(renderSphere, viewProjectionMatrix, viewportMatrix, ball.color);
 
 
 
