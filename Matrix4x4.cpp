@@ -255,3 +255,35 @@ void MatrixScreenPrintf(int x, int y, const Matrix4x4& matrix, const char* label
 		}
 	}
 }
+
+Matrix4x4 operator+(const Matrix4x4& m1, const Matrix4x4& m2) {
+	Matrix4x4 result = {};
+	for (int row = 0; row < 4; ++row) {
+		for (int col = 0; col < 4; ++col) {
+			result.m[row][col] = m1.m[row][col] + m2.m[row][col];
+		}
+	}
+	return result;
+}
+
+Matrix4x4 operator-(const Matrix4x4& m1, const Matrix4x4& m2) {
+	Matrix4x4 result = {};
+	for (int row = 0; row < 4; ++row) {
+		for (int col = 0; col < 4; ++col) {
+			result.m[row][col] = m1.m[row][col] - m2.m[row][col];
+		}
+	}
+	return result;
+}
+
+Matrix4x4 operator*(const Matrix4x4& m1, const Matrix4x4& m2) {
+	Matrix4x4 result = {};
+	for (int i = 0; i < 4; ++i) {
+		for (int j = 0; j < 4; ++j) {
+			for (int k = 0; k < 4; ++k) {
+				result.m[i][j] += m1.m[i][k] * m2.m[k][j];
+			}
+		}
+	}
+	return result;
+}

@@ -696,9 +696,6 @@ Vector3 ClosestPoint(const Vector3& point, const Segment& segment) {
 			 segment.origin.z + segment.diff.z * t };
 }
 
-Vector3 operator+(const Vector3& v1, const Vector3& v2) { return Add(v1, v2); }
-Vector3 operator-(const Vector3& v1, const Vector3& v2) { return Subtract(v1, v2); }
-Vector3 operator*(float s, const Vector3& v) { return Multiply(s, v); }
 
 
 
@@ -722,14 +719,14 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Vector3 a{ 0.2f,1.0f,0.0f };
 	Vector3 b{ 2.4f,3.1f,1.2f };
 
-	Vector3 c = operator+(a, b);
-	Vector3 d = operator-(a, b);
-	Vector3 e = operator*(2.4f, a);
+	Vector3 c = a + b;
+	Vector3 d = a - b;
+	Vector3 e = a * 2.4f;
 
 	Vector3 rotate(0.4f, 1.43f, -0.8f);
 	Matrix4x4 rotateXMatrix = MakeRotateXMatrix(rotate.x);
 	Matrix4x4 rotateYMatrix = MakeRotateYMatrix(rotate.y);
-	Matrix4x4 rotateZMatrix = MakeRotateXMatrix(rotate.z);
+	Matrix4x4 rotateZMatrix = MakeRotateZMatrix(rotate.z);
 	Matrix4x4 rotateMatrix = rotateXMatrix * rotateYMatrix * rotateZMatrix;
 
 	/*

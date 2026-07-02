@@ -56,9 +56,7 @@ Vector3 Transform(const Vector3& vector, const Matrix4x4& matrix);
 // 4x4　X軸回転行列
 Matrix4x4 MakeRotateXMatrix(float radian);
 
-inline Matrix4x4 operator*(const Matrix4x4& m1, const Matrix4x4& m2) {
-	return Multiply(m1, m2);
-}
+
 
 // 4x4　Y軸回転行列
 Matrix4x4 MakeRotateYMatrix(float radian);
@@ -85,3 +83,7 @@ Vector3 Cross(const Vector3& v1, const Vector3& v2);
 
 // 4x4行列の数値表示
 void MatrixScreenPrintf(int x, int y, const Matrix4x4& matrix, const char* label);
+
+Matrix4x4 operator+(const Matrix4x4& m1, const Matrix4x4& m2);
+Matrix4x4 operator-(const Matrix4x4& m1, const Matrix4x4& m2);
+Matrix4x4 operator*(const Matrix4x4& m1, const Matrix4x4& m2);
