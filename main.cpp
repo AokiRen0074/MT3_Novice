@@ -715,19 +715,15 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	// カメラの初期設
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
+	Vector3 center = { 0.0f, 1.0f, 0.0f };  // 円の中心座標
+	float radius = 0.8f;                    // 円の半径 r
+	float angularVelocity = (float)M_PI;    // 角速度 
+	float angle = 0.0f;                     // 現在の角度 θ
 
-	Vector3 a{ 0.2f,1.0f,0.0f };
-	Vector3 b{ 2.4f,3.1f,1.2f };
+	Sphere ball;
+	ball.radius = 0.05f; // 見た目の大きさ
 
-	Vector3 c = a + b;
-	Vector3 d = a - b;
-	Vector3 e = a * 2.4f;
-
-	Vector3 rotate(0.4f, 1.43f, -0.8f);
-	Matrix4x4 rotateXMatrix = MakeRotateXMatrix(rotate.x);
-	Matrix4x4 rotateYMatrix = MakeRotateYMatrix(rotate.y);
-	Matrix4x4 rotateZMatrix = MakeRotateZMatrix(rotate.z);
-	Matrix4x4 rotateMatrix = rotateXMatrix * rotateYMatrix * rotateZMatrix;
+	bool isStart = false; // シミュレーションの開始フラグ
 
 	/*
 	Vector3 translates[3] = {
@@ -880,17 +876,52 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		Imgui
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
-		ImGui::Begin("Window");
-		ImGui::Text("c:%f, %f,%f",c.x,c.y,c.z);
-		ImGui::Text("d:%f, %f,%f",d.x,d.y,d.z);
-		ImGui::Text("e:%f, %f,%f",e.x,e.y,e.z);
-		ImGui::Text("matrix:\n%f,%f,%f,\n%f,%f,%f,\n%f,%f,%f,\n%f,%f,%f\n",
-			rotateMatrix.m[0][0], rotateMatrix.m[0][1], rotateMatrix.m[0][2], rotateMatrix.m[0][3],
-			rotateMatrix.m[1][0], rotateMatrix.m[1][1], rotateMatrix.m[1][2], rotateMatrix.m[1][3],
-			rotateMatrix.m[2][0], rotateMatrix.m[2][1], rotateMatrix.m[2][2], rotateMatrix.m[2][3],
-			rotateMatrix.m[3][0], rotateMatrix.m[3][1], rotateMatrix.m[3][2], rotateMatrix.m[3][3]);
+		ImGui::Begin("Uniform Circular Motion");
+
+		// スタートストップ
+		if (ImGui::Button(isStart ? "Stop" : "Start!")) {
+			isStart = !isStart;
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Reset")) {
+			angle = 0.0f;
+			isStart = false;
+		}
+
+		ImGui::Separator();
+		ImGui::DragFloat("Angular Velocity (rad/s)", &angularVelocity, 0.01f);
+		ImGui::DragFloat("Radius", &radius, 0.01f);
+		ImGui::DragFloat3("Center Position", &center.x, 0.01f);
+		ImGui::Text("Current Angle: %.2f rad", angle);
 		ImGui::End();
 
+
+		if (isStart) {
+			float deltaTime = 1.0f / 60.0f; // 1フレームの経過時間
+			// 角度を更新 
+			angle += angularVelocity * deltaTime;
+		}
+
+
+
+		// 位置Pの計算
+		ball.center.x = center.x + std::cos(angle) * radius;
+		ball.center.y = center.y + std::sin(angle) * radius;
+		ball.center.z = center.z;
+
+		// 速度 vの計算
+		Vector3 velocity = {
+			-radius * angularVelocity * std::sin(angle),
+			 radius * angularVelocity * std::cos(angle),
+			 0.0f
+		};
+
+		// 加速度aの計算
+		Vector3 acceleration = {
+			-angularVelocity * angularVelocity * radius * std::cos(angle),
+			-angularVelocity * angularVelocity * radius * std::sin(angle),
+			 0.0f
+		};
 
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
@@ -922,6 +953,28 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 		// グリッドを描画
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
+
+		// 中心点の描画 
+		Sphere centerSphere = { center, 0.02f };
+		DrawSphere(centerSphere, viewProjectionMatrix, viewportMatrix, 0xAAAAAAFF);
+
+		// 球体の描画
+		DrawSphere(ball, viewProjectionMatrix, viewportMatrix, 0xFFFFFFFF);
+
+		Vector3 screenCenter = Transform(Transform(center, viewProjectionMatrix), viewportMatrix);
+		Vector3 screenBall = Transform(Transform(ball.center, viewProjectionMatrix), viewportMatrix);
+		Novice::DrawLine((int)screenCenter.x, (int)screenCenter.y, (int)screenBall.x, (int)screenBall.y, 0x555555FF);
+
+		// 速度ベクトルv
+		Vector3 vEnd = ball.center + velocity; 
+		Vector3 screenVEnd = Transform(Transform(vEnd, viewProjectionMatrix), viewportMatrix);
+		Novice::DrawLine((int)screenBall.x, (int)screenBall.y, (int)screenVEnd.x, (int)screenVEnd.y, 0x0000FFFF);
+
+		// 加速度ベクトルa
+		Vector3 aEnd = ball.center + acceleration;
+		Vector3 screenAEnd = Transform(Transform(aEnd, viewProjectionMatrix), viewportMatrix);
+		Novice::DrawLine((int)screenBall.x, (int)screenBall.y, (int)screenAEnd.x, (int)screenAEnd.y, 0xFF0000FF);
+
 
 
 
