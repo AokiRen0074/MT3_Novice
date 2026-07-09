@@ -50,6 +50,16 @@ struct OBB {
 	Vector3 size;
 };
 
+// 振り子構造体
+struct Pendulum {
+	Vector3 anchor;              // アンカーポイント
+	float length;                // 紐の長さ
+	float angle;                 // 現在の角度
+	float angularVelocity;       // 角速度
+	float angularAcceleration;   // 角加速度
+};
+
+
 // 線形補完
 Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t) {
 	return {
@@ -715,6 +725,8 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	// カメラの初期設
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
+
+	/*
 	Vector3 center = { 0.0f, 1.0f, 0.0f };  // 円の中心座標
 	float radius = 0.8f;                    // 円の半径 r
 	float angularVelocity = (float)M_PI;    // 角速度 
@@ -724,6 +736,20 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	ball.radius = 0.05f; // 見た目の大きさ
 
 	bool isStart = false; // シミュレーションの開始フラグ
+	*/
+
+	Pendulum pendulum;
+	pendulum.anchor = { 0.0f, 1.0f, 0.0f };
+	pendulum.length = 0.8f;
+	pendulum.angle = 0.7f;
+	pendulum.angularVelocity = 0.0f;
+	pendulum.angularAcceleration = 0.0f;
+
+	// 先端にぶら下げる球
+	Sphere ball;
+	ball.radius = 0.05f;
+
+	bool isStart = false; // シミュレーション開始フラグ
 
 	/*
 	Vector3 translates[3] = {
@@ -876,52 +902,49 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		Imgui
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
-		ImGui::Begin("Uniform Circular Motion");
-
-		// スタートストップ
+		ImGui::Begin("Pendulum");
 		if (ImGui::Button(isStart ? "Stop" : "Start!")) {
 			isStart = !isStart;
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Reset")) {
-			angle = 0.0f;
 			isStart = false;
+			pendulum.angle = 0.7f;
+			pendulum.angularVelocity = 0.0f;
+			pendulum.angularAcceleration = 0.0f;
 		}
 
 		ImGui::Separator();
-		ImGui::DragFloat("Angular Velocity (rad/s)", &angularVelocity, 0.01f);
-		ImGui::DragFloat("Radius", &radius, 0.01f);
-		ImGui::DragFloat3("Center Position", &center.x, 0.01f);
-		ImGui::Text("Current Angle: %.2f rad", angle);
+		ImGui::DragFloat3("Anchor", &pendulum.anchor.x, 0.01f);
+		ImGui::DragFloat("Length", &pendulum.length, 0.01f);
+		// シミュレーション停止中のみ角度を手動変更可能にする
+		if (!isStart) {
+			ImGui::DragFloat("Start Angle", &pendulum.angle, 0.01f);
+		}
+		else {
+			ImGui::Text("Current Angle: %.3f", pendulum.angle);
+		}
+		ImGui::Text("Angular Velocity: %.3f", pendulum.angularVelocity);
 		ImGui::End();
 
 
 		if (isStart) {
-			float deltaTime = 1.0f / 60.0f; // 1フレームの経過時間
-			// 角度を更新 
-			angle += angularVelocity * deltaTime;
+			float deltaTime = 1.0f / 60.0f; 
+
+			// 角加速度の計算
+			pendulum.angularAcceleration = -(9.8f / pendulum.length) * std::sin(pendulum.angle);
+
+			// 角速度の更新
+			pendulum.angularVelocity += pendulum.angularAcceleration * deltaTime;
+
+			// 角度の更新
+			pendulum.angle += pendulum.angularVelocity * deltaTime;
 		}
 
 
-
-		// 位置Pの計算
-		ball.center.x = center.x + std::cos(angle) * radius;
-		ball.center.y = center.y + std::sin(angle) * radius;
-		ball.center.z = center.z;
-
-		// 速度 vの計算
-		Vector3 velocity = {
-			-radius * angularVelocity * std::sin(angle),
-			 radius * angularVelocity * std::cos(angle),
-			 0.0f
-		};
-
-		// 加速度aの計算
-		Vector3 acceleration = {
-			-angularVelocity * angularVelocity * radius * std::cos(angle),
-			-angularVelocity * angularVelocity * radius * std::sin(angle),
-			 0.0f
-		};
+		ball.center.x = pendulum.anchor.x + std::sin(pendulum.angle) * pendulum.length;
+		ball.center.y = pendulum.anchor.y - std::cos(pendulum.angle) * pendulum.length;
+		ball.center.z = pendulum.anchor.z;
 
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
@@ -951,30 +974,15 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		/// ↓描画処理ここから
 		///
 
-		// グリッドを描画
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
-		// 中心点の描画 
-		Sphere centerSphere = { center, 0.02f };
-		DrawSphere(centerSphere, viewProjectionMatrix, viewportMatrix, 0xAAAAAAFF);
-
-		// 球体の描画
-		DrawSphere(ball, viewProjectionMatrix, viewportMatrix, 0xFFFFFFFF);
-
-		Vector3 screenCenter = Transform(Transform(center, viewProjectionMatrix), viewportMatrix);
+		// 紐
+		Vector3 screenAnchor = Transform(Transform(pendulum.anchor, viewProjectionMatrix), viewportMatrix);
 		Vector3 screenBall = Transform(Transform(ball.center, viewProjectionMatrix), viewportMatrix);
-		Novice::DrawLine((int)screenCenter.x, (int)screenCenter.y, (int)screenBall.x, (int)screenBall.y, 0x555555FF);
+		Novice::DrawLine((int)screenAnchor.x, (int)screenAnchor.y, (int)screenBall.x, (int)screenBall.y, 0xFFFFFFFF);
 
-		// 速度ベクトルv
-		Vector3 vEnd = ball.center + velocity; 
-		Vector3 screenVEnd = Transform(Transform(vEnd, viewProjectionMatrix), viewportMatrix);
-		Novice::DrawLine((int)screenBall.x, (int)screenBall.y, (int)screenVEnd.x, (int)screenVEnd.y, 0x0000FFFF);
-
-		// 加速度ベクトルa
-		Vector3 aEnd = ball.center + acceleration;
-		Vector3 screenAEnd = Transform(Transform(aEnd, viewProjectionMatrix), viewportMatrix);
-		Novice::DrawLine((int)screenBall.x, (int)screenBall.y, (int)screenAEnd.x, (int)screenAEnd.y, 0xFF0000FF);
-
+		// 先端のボール
+		DrawSphere(ball, viewProjectionMatrix, viewportMatrix, 0xFFFFFFFF);
 
 
 
