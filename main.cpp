@@ -59,6 +59,15 @@ struct Pendulum {
 	float angularAcceleration;   // 角加速度
 };
 
+// 円錐振り子構造体
+struct ConicalPendulum {
+	Vector3 anchor;          // アンカーポイント
+	float length;            // 紐の長さ
+	float halfApexAngle;     // 円錐の頂角の半分 
+	float angle;             // 現在の角度
+	float angularVelocity;   // 角速度
+};
+
 
 // 線形補完
 Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t) {
@@ -726,6 +735,19 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
 
+	// 円錐振り子
+	ConicalPendulum conicalPendulum;
+	conicalPendulum.anchor = { 0.0f, 1.0f, 0.0f };
+	conicalPendulum.length = 0.8f;
+	conicalPendulum.halfApexAngle = 0.7f;
+	conicalPendulum.angle = 0.0f;
+	conicalPendulum.angularVelocity = 0.0f;
+
+	Sphere ball;
+	ball.radius = 0.05f;
+
+	bool isStart = false; // シミュレーション開始フラグ
+
 	/*
 	Vector3 center = { 0.0f, 1.0f, 0.0f };  // 円の中心座標
 	float radius = 0.8f;                    // 円の半径 r
@@ -738,6 +760,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	bool isStart = false; // シミュレーションの開始フラグ
 	*/
 
+	/*
 	Pendulum pendulum;
 	pendulum.anchor = { 0.0f, 1.0f, 0.0f };
 	pendulum.length = 0.8f;
@@ -750,6 +773,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	ball.radius = 0.05f;
 
 	bool isStart = false; // シミュレーション開始フラグ
+	*/
 
 	/*
 	Vector3 translates[3] = {
@@ -902,49 +926,46 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		Imgui
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
-		ImGui::Begin("Pendulum");
+		ImGui::Begin("Conical Pendulum");
+
 		if (ImGui::Button(isStart ? "Stop" : "Start!")) {
 			isStart = !isStart;
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Reset")) {
 			isStart = false;
-			pendulum.angle = 0.7f;
-			pendulum.angularVelocity = 0.0f;
-			pendulum.angularAcceleration = 0.0f;
+			conicalPendulum.angle = 0.0f;
+			conicalPendulum.angularVelocity = 0.0f;
 		}
 
 		ImGui::Separator();
-		ImGui::DragFloat3("Anchor", &pendulum.anchor.x, 0.01f);
-		ImGui::DragFloat("Length", &pendulum.length, 0.01f);
-		// シミュレーション停止中のみ角度を手動変更可能にする
-		if (!isStart) {
-			ImGui::DragFloat("Start Angle", &pendulum.angle, 0.01f);
-		}
-		else {
-			ImGui::Text("Current Angle: %.3f", pendulum.angle);
-		}
-		ImGui::Text("Angular Velocity: %.3f", pendulum.angularVelocity);
+		ImGui::DragFloat3("Anchor", &conicalPendulum.anchor.x, 0.01f);
+		ImGui::DragFloat("Length", &conicalPendulum.length, 0.01f);
+		ImGui::DragFloat("Half Apex Angle", &conicalPendulum.halfApexAngle, 0.01f);
+		ImGui::Text("Current Angle: %.3f", conicalPendulum.angle);
+		ImGui::Text("Angular Velocity: %.3f", conicalPendulum.angularVelocity);
 		ImGui::End();
+	
 
 
 		if (isStart) {
-			float deltaTime = 1.0f / 60.0f; 
+			float deltaTime = 1.0f / 60.0f; // 60fps固定
 
-			// 角加速度の計算
-			pendulum.angularAcceleration = -(9.8f / pendulum.length) * std::sin(pendulum.angle);
-
-			// 角速度の更新
-			pendulum.angularVelocity += pendulum.angularAcceleration * deltaTime;
+			// 角速度の計算
+			conicalPendulum.angularVelocity = std::sqrt(9.8f / (conicalPendulum.length * std::cos(conicalPendulum.halfApexAngle)));
 
 			// 角度の更新
-			pendulum.angle += pendulum.angularVelocity * deltaTime;
+			conicalPendulum.angle += conicalPendulum.angularVelocity * deltaTime;
 		}
 
+		// 半径と高さの
+		float radius = std::sin(conicalPendulum.halfApexAngle) * conicalPendulum.length;
+		float height = std::cos(conicalPendulum.halfApexAngle) * conicalPendulum.length;
 
-		ball.center.x = pendulum.anchor.x + std::sin(pendulum.angle) * pendulum.length;
-		ball.center.y = pendulum.anchor.y - std::cos(pendulum.angle) * pendulum.length;
-		ball.center.z = pendulum.anchor.z;
+		// ボールの中心位置の計算
+		ball.center.x = conicalPendulum.anchor.x + std::cos(conicalPendulum.angle) * radius;
+		ball.center.y = conicalPendulum.anchor.y - height;
+		ball.center.z = conicalPendulum.anchor.z - std::sin(conicalPendulum.angle) * radius;
 
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
@@ -977,7 +998,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
 		// 紐
-		Vector3 screenAnchor = Transform(Transform(pendulum.anchor, viewProjectionMatrix), viewportMatrix);
+		Vector3 screenAnchor = Transform(Transform(conicalPendulum.anchor, viewProjectionMatrix), viewportMatrix);
 		Vector3 screenBall = Transform(Transform(ball.center, viewProjectionMatrix), viewportMatrix);
 		Novice::DrawLine((int)screenAnchor.x, (int)screenAnchor.y, (int)screenBall.x, (int)screenBall.y, 0xFFFFFFFF);
 
