@@ -40,6 +40,8 @@ Vector3 Normalize(const Vector3& v);
 // 三次元ベクトルの数値表示
 void VectorScreenPrintf(int x, int y, const Vector3& vector, const char* label);
 
+
+
 // 単項演算子
 Vector3 operator-(const Vector3& v);
 

@@ -68,6 +68,15 @@ struct ConicalPendulum {
 	float angularVelocity;   // 角速度
 };
 
+struct Ball {
+	Vector3 position;
+	Vector3 velocity;
+	Vector3 acceleration;
+	float mass;
+	float radius;
+	uint32_t color;
+};
+
 
 // 線形補完
 Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t) {
@@ -191,6 +200,15 @@ void DrawSphere(const Sphere& sphere, const Matrix4x4& viewProjectionMatrix, con
 	}
 }
 
+// 反射ベクトルを求める
+Vector3 Reflect(const Vector3& input, const Vector3& normal) {
+	float dot = input.x * normal.x + input.y * normal.y + input.z * normal.z;
+	return {
+		input.x - 2.0f * dot * normal.x,
+		input.y - 2.0f * dot * normal.y,
+		input.z - 2.0f * dot * normal.z
+	};
+}
 
 // 分離軸をみつける
 bool TestSeparatingAxis(const Vector3& axis, const OBB& obb1, const OBB& obb2) {
@@ -735,6 +753,24 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Vector3 cameraTranslate = { 0.0f, 1.9f, -6.49f };
 	Vector3 cameraRotate = { 0.26f, 0.0f, 0.0f };
 
+	Plane plane;
+	plane.normal = { -0.2f, 0.9f, -0.3f };
+	// 法線の正規化
+	float nl = std::sqrt(plane.normal.x * plane.normal.x + plane.normal.y * plane.normal.y + plane.normal.z * plane.normal.z);
+	if (nl > 0.0f) { plane.normal.x /= nl; plane.normal.y /= nl; plane.normal.z /= nl; }
+	plane.distance = 0.0f;
+
+	Ball ball{};
+	ball.position = { 0.8f, 1.2f, 0.3f };
+	ball.velocity = { 0.0f, 0.0f, 0.0f };
+	ball.mass = 2.0f;
+	ball.radius = 0.05f;
+	ball.color = 0xFFFFFFFF; // 白
+
+	float e = 0.8f;       // 反発係数
+	bool isStart = false; // シミュレーション開始フラグ
+
+	/*
 	// 円錐振り子
 	ConicalPendulum conicalPendulum;
 	conicalPendulum.anchor = { 0.0f, 1.0f, 0.0f };
@@ -747,6 +783,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	ball.radius = 0.05f;
 
 	bool isStart = false; // シミュレーション開始フラグ
+	*/
 
 	/*
 	Vector3 center = { 0.0f, 1.0f, 0.0f };  // 円の中心座標
@@ -926,47 +963,55 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		Imgui
 		----------------------------------------------------*/
 		// ImGuiで値を調整できるようにする
-		ImGui::Begin("Conical Pendulum");
-
+		ImGui::Begin("Bouncing Ball Simulation");
 		if (ImGui::Button(isStart ? "Stop" : "Start!")) {
 			isStart = !isStart;
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Reset")) {
 			isStart = false;
-			conicalPendulum.angle = 0.0f;
-			conicalPendulum.angularVelocity = 0.0f;
+			ball.position = { 0.8f, 1.2f, 0.3f };
+			ball.velocity = { 0.0f, 0.0f, 0.0f };
 		}
-
 		ImGui::Separator();
-		ImGui::DragFloat3("Anchor", &conicalPendulum.anchor.x, 0.01f);
-		ImGui::DragFloat("Length", &conicalPendulum.length, 0.01f);
-		ImGui::DragFloat("Half Apex Angle", &conicalPendulum.halfApexAngle, 0.01f);
-		ImGui::Text("Current Angle: %.3f", conicalPendulum.angle);
-		ImGui::Text("Angular Velocity: %.3f", conicalPendulum.angularVelocity);
+		ImGui::DragFloat("Restitution (e)", &e, 0.01f, 0.0f, 1.0f);
+		ImGui::DragFloat3("Plane Normal", &plane.normal.x, 0.01f);
 		ImGui::End();
 	
+		// 正規化
+		float nLen = std::sqrt(plane.normal.x * plane.normal.x + plane.normal.y * plane.normal.y + plane.normal.z * plane.normal.z);
+		if (nLen > 0.0f) { plane.normal.x /= nLen; plane.normal.y /= nLen; plane.normal.z /= nLen; }
+
 
 
 		if (isStart) {
-			float deltaTime = 1.0f / 60.0f; // 60fps固定
+			float deltaTime = 1.0f / 60.0f;
 
-			// 角速度の計算
-			conicalPendulum.angularVelocity = std::sqrt(9.8f / (conicalPendulum.length * std::cos(conicalPendulum.halfApexAngle)));
+			// 重力加速度を適用
+			ball.acceleration = { 0.0f, -9.8f, 0.0f };
+			ball.velocity = ball.velocity + ball.acceleration * deltaTime;
+			ball.position = ball.position + ball.velocity * deltaTime;
 
-			// 角度の更新
-			conicalPendulum.angle += conicalPendulum.angularVelocity * deltaTime;
+			// 衝突判定
+			Sphere sphere{ ball.position, ball.radius };
+			if (IsCollision(sphere, plane)) {
+
+				Vector3 reflected = Reflect(ball.velocity, plane.normal);
+				Vector3 projectToNormal = Project(reflected, plane.normal);
+				Vector3 movingDirection = reflected - projectToNormal;
+
+				// 法線方向の力にだけ反発係数をかけて減衰
+				ball.velocity = projectToNormal * e + movingDirection;
+
+				// 衝突時に平面の奥へめり込んでしまった分を、平面の表面に押し戻す
+				float dot = ball.position.x * plane.normal.x + ball.position.y * plane.normal.y + ball.position.z * plane.normal.z;
+				float distance = dot - plane.distance;
+				if (distance < ball.radius) {
+					float depth = ball.radius - distance; // めり込んでいる深さ
+					ball.position = ball.position + plane.normal * depth;
+				}
+			}
 		}
-
-		// 半径と高さの
-		float radius = std::sin(conicalPendulum.halfApexAngle) * conicalPendulum.length;
-		float height = std::cos(conicalPendulum.halfApexAngle) * conicalPendulum.length;
-
-		// ボールの中心位置の計算
-		ball.center.x = conicalPendulum.anchor.x + std::cos(conicalPendulum.angle) * radius;
-		ball.center.y = conicalPendulum.anchor.y - height;
-		ball.center.z = conicalPendulum.anchor.z - std::sin(conicalPendulum.angle) * radius;
-
 
 		Vector3 cameraScale = { 1.0f, 1.0f, 1.0f };
 
@@ -997,13 +1042,13 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
-		// 紐
-		Vector3 screenAnchor = Transform(Transform(conicalPendulum.anchor, viewProjectionMatrix), viewportMatrix);
-		Vector3 screenBall = Transform(Transform(ball.center, viewProjectionMatrix), viewportMatrix);
-		Novice::DrawLine((int)screenAnchor.x, (int)screenAnchor.y, (int)screenBall.x, (int)screenBall.y, 0xFFFFFFFF);
+		// 平面
+		DrawPlane(plane, viewProjectionMatrix, viewportMatrix, 0x00FFFFFF);
 
-		// 先端のボール
-		DrawSphere(ball, viewProjectionMatrix, viewportMatrix, 0xFFFFFFFF);
+		// 落下するボール
+		Sphere renderSphere{ ball.position, ball.radius };
+		DrawSphere(renderSphere, viewProjectionMatrix, viewportMatrix, ball.color);
+
 
 
 

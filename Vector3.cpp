@@ -62,6 +62,7 @@ void VectorScreenPrintf(int x, int y, const Vector3& vector, const char* label) 
 	Novice::ScreenPrintf(x + kColumnWidth * 3, y, "%s", label);
 }
 
+
 // 複合代入演算子
 Vector3& Vector3::operator+=(const Vector3& v) {
 	x += v.x; y += v.y; z += v.z;
